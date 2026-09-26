@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>YouTube Bulk Scheduler</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+
+<!-- ------------------------------------------------------------ login view -->
+<section id="login-view" class="view hidden">
+  <div class="login-card">
+    <h1>YouTube Bulk Scheduler</h1>
+    <p class="muted">Single-owner system. Sign in with the authorized Google account.</p>
+    <button id="login-btn" class="btn primary">Sign in with Google</button>
+    <p id="login-error" class="error hidden"></p>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------- main view -->
+<main id="app-view" class="view hidden">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot" id="yt-dot"></span>
+      <h1>YouTube Bulk Scheduler</h1>
+    </div>
+    <div class="topbar-right">
+      <span id="clock" class="clock"></span>
+      <button id="logout-btn" class="btn ghost small">Sign out</button>
+    </div>
+  </header>
+
+  <p id="config-error" class="banner error hidden"></p>
+
+  <!-- ---------------------------------------------------------- dropzone -->
+  <section class="card">
+    <div class="card-head">
+      <h2>1. Bulk upload MP4</h2>
+      <span class="muted small" id="upload-summary"></span>
+    </div>
+
+    <div id="dropzone" class="dropzone" tabindex="0" role="button"
+         aria-label="Drop MP4 files here or click to select">
+      <p class="dz-title">Drag &amp; drop MP4 files here</p>
+      <p class="muted small">or</p>
+      <label class="btn primary">
+        Select files
+        <input id="file-input" type="file" accept="video/mp4,.mp4" multiple hidden>
+      </label>
+      <p class="muted small">Works from desktop and phone. 10, 100 or 1,000 files are all queued, never processed immediately.</p>
+    </div>
+
+    <div id="upload-progress" class="upload-list"></div>
+  </section>
+
+  <!-- ------------------------------------------------------------- status -->
+  <section class="grid-2">
+    <div class="card">
+      <div class="card-head"><h2>2. Today</h2><span id="today-count" class="pill"></span></div>
+      <ul id="today-slots" class="slots"></ul>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>3. Tomorrow buffer</h2><span id="buffer-count" class="pill"></span></div>
+      <ul id="buffer-slots" class="slots"></ul>
+    </div>
+  </section>
+
+  <section class="grid-2">
+    <div class="card">
+      <div class="card-head"><h2>4. Queue</h2><span id="queue-count" class="pill"></span></div>
+      <div id="queue-body"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>5. Processing</h2><span id="processing-count" class="pill"></span></div>
+      <div id="processing-body" class="muted small">Idle.</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>6. Failed</h2>
+      <div class="btn-row">
+        <button id="retry-all" class="btn small">Retry failed</button>
+        <button id="clear-failed" class="btn ghost small">Clear failed</button>
+      </div>
+    </div>
+    <div id="failed-body" class="muted small">No failures.</div>
+  </section>
+
+  <section class="grid-2">
+    <div class="card">
+      <div class="card-head"><h2>7. Storage</h2></div>
+      <div id="storage-body" class="kv"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>8. YouTube</h2></div>
+      <div id="youtube-body" class="kv"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>9. AI providers</h2></div>
+    <div id="providers-body" class="providers"></div>
+    <div id="paused-body" class="muted small"></div>
+  </section>
+
+  <footer class="foot muted small">
+    Master timezone: <strong id="tz-label">America/New_York</strong> &middot;
+    Schedule: <span id="slot-label"></span> &middot;
+    Delete source after confirmed YouTube schedule: <strong id="delete-label"></strong>
+  </footer>
+</main>
+
+<script src="/app.js" defer></script>
+</body>
+</html>
