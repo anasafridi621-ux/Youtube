@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sign in &middot; YouTube Bulk Scheduler</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<section class="view" style="display:flex;align-items:center;justify-content:center;padding:24px">
+  <div class="login-card">
+    <h1>YouTube Bulk Scheduler</h1>
+    <p class="muted">Single-owner system. Sign in with the authorized Google account.</p>
+    <button class="btn primary" onclick="location.href='/api/auth/google/start'">Sign in with Google</button>
+    <p class="muted small">Only the address configured in <code>OWNER_EMAIL</code> can sign in.</p>
+  </div>
+</section>
+</body>
+</html>

@@ -1,616 +1,859 @@
-# AgentTube - ECGHuNZSECqTXabaLjkVrTEnguiNZLkKF1qi8oBGpump
-
-**The open-source AI agent that runs a YouTube channel end to end.**
-
-Research topics → write scripts → generate narration and visuals → assemble videos → optimize metadata → review → schedule → publish → learn from analytics and from what your audience says.
-
-[![CI](https://github.com/darkzOGx/youtube-automation-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/darkzOGx/youtube-automation-agent/actions/workflows/ci.yml)
-[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Node.js 18+](https://img.shields.io/badge/node-18%2B-43853d.svg)](package.json)
-
-## What's new on master
-
-- **v2.10.0 is now on master:** DarkzSEO discoverability audits, controlled growth experiments, and outcome-aware channel operation are available together in the approval-first workflow.
-
-### September 21, 2026 reliability hotfixes
-
-The latest production fixes are included in [`124a1ed`](https://github.com/darkzOGx/youtube-automation-agent/commit/124a1ed18e474878d5829812dd632e579adbd860) and [`d52b40d`](https://github.com/darkzOGx/youtube-automation-agent/commit/d52b40d94a007caf5e7f256378c0265ddcf09d2b):
-
-- **DarkzSEO works without Python:** the bundled advisory audit is now the default. AgentTube no longer auto-selects sibling Python checkouts, and a missing or broken explicitly configured external runtime falls back to the bundled audit instead of reporting `No module named darkzseo`.
-- **Narration repairs keep correct timing:** regenerated narration updates the scene duration from the replacement audio, preventing stale timing and long silent gaps after a rebuild.
-- **Cleaner spoken narration:** internal CTA metadata and bracketed placeholders are excluded from speech, including placeholders that appear in the middle of a line.
-- **Configured visual styles are respected:** scene generation and repair prompts no longer force the `ethereal` style when the channel uses another visual direction.
-- **Complete scheduling controls:** Review Studio can reschedule a production, publish it now, or delete its schedule without deleting the generated content. Immediate uploads also use the correct YouTube publishing metadata.
-- **Reliable desktop YouTube authorization:** OAuth uses the exact dynamically selected loopback address and port, while legacy hardcoded callback settings are normalized automatically.
-- **Null-safe content generation:** a missing `strategyContext` no longer crashes content generation while reading its angle or keywords.
-
-These paths are covered by the 46-test system suite. Existing safety gates still block simulated video, missing narration, unresolved factual claims, and unconfirmed media rights from publishing.
-
-## What's new in v2.10.0
-
-**AgentTube now has a discoverability adapter layer.** v2.10.0 connects the production pipeline to DarkzSEO without merging the projects or weakening human review, then adds the evidence needed to prove what packaging and strategy actually work:
-
-- **DarkzSEO Discoverability Preflight:** send a canonical content package—not the private dashboard—through versioned GEO, AIO, AEO, and web-search checks after metadata and provenance are assembled.
-- **Reviewable evidence:** persist stable rule IDs, severity, engine/schema identity, fingerprints, and operator decisions in SQLite. Keep a finding actionable or dismiss a false positive with a reason that carries into matching future audits.
-- **Safe local adapter boundary:** run the bundled content checks without Python; optional external DarkzSEO checkouts still use JSON-only stdin/stdout without a shell or inherited API secrets.
-- **Controlled Growth Experiments Studio:** rotate only approved title/thumbnail arms, measure real interval evidence, restore the control, and require a separate decision before adopting a winner.
-- **Outcome & ROI Studio:** align the operator with a measurable KPI, target window, budget, and available revenue/cost evidence without converting missing economics into false zeroes.
-- **Platform-ready foundation:** audits already retain their target platform, providing the durable contract for planned TikTok and Instagram/Reels publishing and analytics adapters.
-
-The content preflight works out of the box. Set `DARKZSEO_PATH` only when developing against a separate DarkzSEO 1.4+ checkout. If that optional external runtime is missing or broken, AgentTube automatically uses the bundled audit.
-
-See the complete release history in [CHANGELOG.md](CHANGELOG.md).
-
-- **Self-hosted:** your credentials, media, and channel data stay under your control.
-- **Approval-first:** nothing is scheduled until quality, rights, and human-review gates pass by default.
-- **Strategy-driven:** give the Autonomous Channel Operator an objective, audience, pillars, cadence, and guardrails; it turns them into researched content plans and production runs.
-- **Provider-flexible:** use Gemini, OpenAI, OpenRouter, Kimi, MiMo, GLM, or another OpenAI-compatible text endpoint, plus Seedance, MiniMax H3, Gemini Omni Flash, Kling, Wan, or local FFmpeg for video.
-- **Observable:** follow persistent generation jobs, failures, review state, publishing, and local activation milestones from the dashboard.
-
-<!-- Launch gate: add only a real 30–45 second dashboard demo captured from a verified end-to-end run. -->
-
-## Quick start
-
-```bash
-git clone https://github.com/darkzOGx/youtube-automation-agent.git
-cd youtube-automation-agent
-npm install
-npm run walkthrough
-npm start
-```
-
-Open `http://localhost:3456`. The walkthrough explains each provider choice, tests credentials, and guides YouTube authorization.
-
-Already know what you are doing? `npm run setup` offers a shorter classic flow, and `.env.example` documents every setting.
-
-### Verify production readiness
-
-Before activating autonomous production, open **Production readiness** in the dashboard and choose **Run verified check**. The gate makes small live text and narration requests, verifies access to the connected YouTube channel, creates and decodes a temporary MP4 containing audio and video, and validates every queued upload's metadata. It never creates or uploads a YouTube video, and temporary probe assets are deleted after the run.
-
-AI image generation can incur a larger provider charge, so its live probe is a separate opt-in checkbox. Without that checkbox, image configuration is reported as verified, skipped, or using the built-in gradient fallback without making a paid image request.
-
-AI video verification has its own **Include paid video probe** checkbox. When enabled, Lumen creates the provider's shortest supported test clip, records the external task and model, downloads and decodes the MP4, then removes the temporary asset. It never silently tries a second paid provider.
-
-Results persist locally in SQLite with exact remediation steps. A recorded blocking failure stops autonomous generation and publishing until a later run passes; manual work remains available when readiness has never been checked or the last result is older than 24 hours.
-
-### Resume an interrupted production
-
-Every generation stage writes a local SQLite checkpoint. If a provider times out or the application restarts, the dashboard shows the saved-stage count and the first incomplete stage. Choose **Resume** to continue from there, or select an earlier stage when you intentionally want to regenerate that stage and everything after it. Saved files are validated before reuse; missing artifacts are regenerated automatically.
-
-Autonomous Operator runs preserve their research and editorial plan, so **Resume run** continues unfinished plan items instead of researching and generating completed videos again. Publishing remains fail-closed: if an upload may have reached YouTube but no video ID was returned, Lumen requires channel reconciliation before another upload attempt.
-
-### Repair one scene without starting over
-
-Every production now keeps a durable scene manifest with its narration, visual prompt, timing, provider/task identity, asset origin, rights state, evidence links, and revision history. Open **Scene Repair Studio** inside Review Studio to edit a scene, change its order, lock a scene that already works, upload a licensed replacement asset, or regenerate only that scene.
-
-Paid video regeneration always shows the provider and generated seconds and requires a separate confirmation. Uploaded assets require an explicit rights confirmation. Narration edits invalidate that scene's audio and factual review; live narration must be regenerated and any new factual claim must be reviewed against verified evidence before approval.
-
-Narration is fail-closed. AgentTube records the TTS provider, model, external task when available, generation time, cost evidence, and failure reason for every scene. If narration is missing, simulated, stale, or failed, the production cannot be approved, scheduled, or published. Use **Regenerate narration only** to repair the audio without spending video-generation credits or replacing a visual.
-
-An intentionally silent production requires a separate operator confirmation and a stored reason of at least 10 characters. The override remains visible in Review Studio, can be reversed, and is included in the narration revision history. Silence is never inferred from a failed provider call.
-
-When the timeline is ready, **Rebuild final video** creates a new MP4 and scene-aware captions while preserving the previous final video path in the production record. Approval stays blocked while any scene is missing, generating, stale, failed, or waiting for rebuild. Approved or scheduled productions are locked against scene repair.
-
-### Repurpose an approved video into Shorts
-
-Open **Shorts Repurposing Studio** inside Review Studio and choose **Create 3 Short drafts**. AgentTube selects self-contained windows from the durable scene timeline and preserves the exact source-scene IDs, start time, duration, rationale, title, description, tags, layout, and inherited review evidence for each candidate. Draft selection is local and does not call an AI provider.
-
-Choose a blurred-canvas, center-crop, or stacked-focus layout, then render a real 9:16 MP4 with mobile-safe burned captions and a separate SRT file. The source video and narration are reused, so the default workflow does not spend new image, video, or TTS credits. Changing the layout invalidates the prior render and requires a fresh local render.
-
-Every Short has its own approval and schedule. Scheduling remains blocked until the source production is approved, provenance is resolved, uploaded media rights are confirmed, every source scene is current, and the operator explicitly confirms the Short's privacy and publish time. Published Shorts retain their parent-production identity while their analytics use a separate Shorts baseline.
-
-### Review research and provenance
-
-Every production has an **Evidence desk** inside Review Studio. Autonomous research carries exact YouTube source metadata into the production, while AI-generated scripts list the factual claims that need review. Add any official articles, datasets, asset licenses, or other evidence that the script needs, verify each source, and connect it to the claims it supports.
-
-A claim can be approved only when it links to a verified source. Unsupported claims remain blocking, and an intentional waiver requires a reviewer note. Productions with no externally verifiable factual claims are marked as not requiring provenance review. The separate factual-review and media-rights attestations remain required before scheduling.
-
-Use the altered or synthetic media control only when the video contains realistic content that requires YouTube disclosure. The selected value is preserved in the publishing queue and included in the YouTube upload request.
-
-### Review discoverability guidance
-
-Every saved production receives an optional **DarkzSEO Discoverability Preflight** in Review Studio after metadata and provenance are assembled. The bundled content auditor reviews a canonical content package—not the private dashboard—and stores the engine version, schema version, severity summary, stable rule IDs, and individual findings in SQLite.
-
-Findings are advisory in this release. Keep a useful recommendation as actionable, or dismiss a false positive with a reviewer reason that carries forward to matching findings on later audits. The bundled audit requires no Python package and never silently changes scripts or metadata.
-
-To test a separate DarkzSEO 1.4+ checkout instead of the bundled auditor:
-
-```bash
-DARKZSEO_PATH=../darkzseo/darkzseo.py npm start
-```
-
-The optional external adapter uses a shell-free Python child process, sends content JSON over stdin, and reads JSON-only stdout. The public PyPI `darkzseo` 1.3.3 package has a different site-audit CLI and is not used by AgentTube.
-
-### What you need
-
-- Node.js 18+
-- A Google account and YouTube Data API credentials
-- At least one AI text provider key
-- FFmpeg, installed automatically through `ffmpeg-static`
-- Python 3.9+ only when explicitly testing an external DarkzSEO checkout
-
-Gemini offers free access for supported text and TTS usage. Gemini AI image generation currently requires paid-tier access; without an image provider, Lumen can assemble gradient-based visuals instead.
-
-### Run the Autonomous Channel Operator
-
-Open **Autonomous operator** in the dashboard and describe the channel outcome—not a task list. Set the objective, audience, content pillars, publishing cadence, success metric, and boundaries, then choose **Activate & run now**.
-
-Lumen refreshes YouTube trend and configured-competitor signals, checks recent channel topics, creates an evidence-labeled editorial plan, and sends each planned video through strategy, script, thumbnail, SEO, production, and workflow management. Active strategies also guide scheduled generation at the requested weekly cadence. Operator runs, decisions, progress, and failures persist in SQLite and remain visible in the dashboard.
-
-By default, finished videos wait for factual review, media-rights confirmation, and approval. Once approved, the existing publishing agent schedules and uploads them. Turning on autonomy does not bypass those gates, and simulated videos still cannot publish.
-
-### Close the performance loop
-
-After publication, Lumen captures comparable 24-hour and 7-day performance snapshots. It evaluates CTR, retention, engagement, watch time, format, length, hook style, and title style against the channel's own history—not a universal view-count target.
-
-Open **Analytics → What the agent learned** to review the evidence and confidence behind each recommendation. Pending or rejected recommendations never influence generation. Once you approve one, the next Autonomous Channel Operator run includes it as an explicit planning constraint. Simulated analytics fallbacks are stored as unverified and are never eligible for baselines or recommendations.
-
-When an approved learning calls for better packaging, Lumen prepares a control plus title and thumbnail variants for new videos. Review Studio shows those options before approval; the selected combination is the only one handed to the publishing queue. Lumen does not silently swap live YouTube metadata.
-
-### Prove a growth recommendation
-
-Open **Analytics → Controlled Growth Experiments** after a video with approved-learning packaging variants is published. Create a draft plan with a 24–168 hour window per arm and a minimum-impressions threshold, review the exact title and thumbnail combinations, then separately approve and start the live test.
-
-Lumen records a cumulative analytics sample before and after each arm and evaluates only the interval delta. Every arm must reach the configured impression and click floor. The leading CTR must clear a 95% evidence threshold without a material retention regression or traffic-source shift; otherwise the result is explicitly **inconclusive**. Simulated analytics never advance an experiment.
-
-Arm rotations are limited to the plan you approved. After the final arm, Lumen restores the control title and thumbnail before presenting the result. Applying the winner is a separate confirmation; only then does the validated packaging pattern become an approved learning for future Autonomous Operator runs. Experiment state and evidence are stored in SQLite so restarts do not erase progress.
-
-### Align the channel with outcomes and ROI
-
-The Autonomous Operator strategy can define a measurable primary outcome—views, watch hours, net subscribers, engagement rate, or estimated revenue—plus a numeric target, evidence window, monthly production budget, and currency. The existing free-text outcome context remains available for goals that need human nuance.
-
-At each real analytics window, Lumen stores subscriber gains and losses, watch hours, monetization evidence when the channel exposes it, and known production costs from durable scene records. **Analytics → Outcome & ROI Studio** shows target progress, evidence coverage, net subscribers, estimated revenue, known cost, ROI, and comparisons by content pillar, format, and production provider.
-
-Missing evidence is explicit. A channel without monetization access shows revenue as unavailable rather than zero, and ROI stays unavailable until both revenue and complete cost evidence exist. When at least two comparable videos exist in each group, the learning engine can propose reallocating future content toward the pillar or format that best advances the configured outcome. That proposal remains pending until you approve it; Lumen never changes the strategy or budget silently.
-
-### Find the exact scene that lost viewers
-
-At each real analytics window, AgentTube also requests YouTube's audience-retention curve and maps its 100 elapsed-time points onto the stored scene durations. Open **Analytics → Scene-aware retention** to see the curve divided by scene, compare absolute and relative retention, and inspect drop-off, rewatch, strong-hold, or steady signals for each beat.
-
-Retention snapshots are stored separately for long-form videos and Shorts. Missing, sparse, or simulated curves never enter this evidence layer. A scene finding creates a pending learning recommendation; it cannot guide future scripts, pacing, or scene structure until the operator approves it, and AgentTube never rewrites a published video. Use **Refresh curve** for a read-only update from YouTube Analytics, or `GET /api/retention/:videoId` to inspect stored evidence.
-
-### Engage with your audience
-
-Open **Engagement** in the dashboard. AgentTube syncs comments for recently published videos every four hours (more often for fresh videos) and classifies them into themes, sentiment, and questions. Likely spam, scams, and toxic comments are quarantined into a separate needs-attention list — AgentTube never deletes or hides a comment; acting on flagged comments stays in YouTube Studio.
-
-Choose **Draft replies** to generate suggested answers in your channel's voice. Nothing posts automatically: every reply waits in the queue where you can edit, discard, or approve it, and approval requires an explicit confirmation. Posting requires re-authorizing YouTube once to grant the comment permission (`youtube.force-ssl`); until then the studio works in read-and-draft mode. A daily posting cap (default 50, `ENGAGEMENT_DAILY_REPLY_CAP`) keeps approval sessions bounded.
-
-When three or more commenters ask for the same thing, the analysis mines an **audience-requested idea** with comment permalinks as evidence. Like every other learning, it stays pending until you approve it — only then can the Autonomous Channel Operator plan a video that answers it. If no AI text provider is configured, comment sync still works, but the studio records only mechanical facts and never invents themes, drafts, or ideas.
-
-## From idea to published video
-
-| Stage | What Lumen does | What you control |
-| --- | --- | --- |
-| Research | Finds topics and builds a content strategy | Niche, audience, blocked topics |
-| Script | Writes the hook, narrative, CTA, and metadata | Voice, format, length, brand direction |
-| Production | Generates narration and visuals, then assembles a real MP4 | Provider choice and media fallbacks |
-| Review | Runs quality checks and opens the video in Review Studio | Facts, media rights, edits, approval |
-| Publish | Schedules and uploads approved content | Privacy, timing, final decision |
-| Learn | Captures 24-hour and 7-day evidence, measures the configured outcome and economics, then proposes the next move | Choose the KPI and approve or reject each learning before it guides planning |
-
-Lumen distinguishes real MP4 output from simulated placeholders. Simulated output cannot enter the approval or publishing path.
-
-For release history, see [CHANGELOG.md](CHANGELOG.md).
-
-## Architecture
-
-```mermaid
-graph TD
-    O[Autonomous Channel Operator] --> A[Research and Editorial Plan]
-    A --> B[Content Strategy Agent]
-    B --> C[Script Writer Agent]
-    C --> D[Thumbnail Designer Agent]
-    C --> E[SEO Optimizer Agent]
-    D --> F[Production Management Agent]
-    E --> F
-    F --> Z[DarkzSEO Discoverability Preflight]
-    Z --> G[Review and Approval Gates]
-    G --> H[Publishing & Scheduling Agent]
-    H --> I[Analytics & Optimization Agent]
-    I -->|feedback loop| A
-```
-
-## How It Works
-
-Each agent handles one stage of the pipeline:
-
-| Agent | Role |
-|-------|------|
-| **Content Strategy** | Analyzes YouTube trends, identifies topics, plans content calendar |
-| **Script Writer** | Generates scripts with hooks, storytelling, CTAs |
-| **Thumbnail Designer** | Creates thumbnails, runs A/B variations |
-| **SEO Optimizer** | Keywords, titles, descriptions, tags |
-| **Production** | Coordinates TTS audio, image assets, video assembly |
-| **Discoverability** | Runs versioned, advisory GEO/AIO/AEO content audits through DarkzSEO |
-| **Publishing** | Uploads, schedules, manages playlists |
-| **Analytics** | Tracks performance, feeds insights back to strategy |
-
-## AI Providers
-
-All OpenAI-compatible providers work out of the box — the system auto-configures the SDK base URL. Pick one, or use OpenRouter to access everything through a single key.
-
-```mermaid
-graph LR
-    subgraph Direct
-        OA[OpenAI<br/>GPT-5.6 family]
-        GM[Gemini<br/>3.7 Flash / 3.1 Pro]
-        KM[Kimi<br/>K3]
-        MM[MiMo<br/>V2.5 Pro]
-        GL[GLM<br/>GLM-5.3]
-    end
-    subgraph Router
-        OR[OpenRouter<br/>400+ models]
-    end
-    Direct --> YAA[YouTube Automation Agent]
-    Router --> YAA
-```
-
-| Provider | Models | Base URL | Cost |
-|----------|--------|----------|------|
-| **OpenAI** | GPT-5.6 Sol, Terra, Luna | `api.openai.com/v1` | provider pricing |
-| **OpenRouter** | 400+ models; curated defaults are validated against its live catalog | `openrouter.ai/api/v1` | varies by model |
-| **Google Gemini** | Gemini 3.7 Flash, 3.1 Pro Preview, 3.5 Flash-Lite | via `@google/genai` SDK | free tiers vary by model and modality |
-| **Kimi (Moonshot AI)** | Kimi K3, K2.7 Code, K2.6 | `api.moonshot.ai/v1` | provider pricing |
-| **MiMo (Xiaomi)** | MiMo V2.5 Pro, V2.5 | `api.xiaomimimo.com/v1` | provider pricing |
-| **GLM (Zhipu AI)** | GLM-5.3, 5.2, 5.1 | `api.z.ai/api/paas/v4/` | provider pricing |
-
-Additional integrations: Anthropic Claude (`claude-fable-5`), ElevenLabs (Eleven v3 TTS), Replicate (Wan 2.7 video), local models via Ollama, any OpenAI-compatible endpoint.
-
-### AI video providers
-
-Local slideshow rendering remains the default, so upgrading does not start paid video requests. Choose a provider in **Channel setup**, set a paid-seconds cap, then run the separately opted-in paid video readiness probe.
-
-| Provider | Default model | Best fit | Clip limits |
-| --- | --- | --- | --- |
-| ByteDance | `bytedance/seedance-2.5` through Replicate | Cinematic long scenes and large reference sets | 4–30 seconds |
-| MiniMax | `MiniMax-H3` | Multimodal references, native stereo audio, optional 2K | 4–15 seconds |
-| Google | `gemini-omni-flash-preview` | Fast generation and conversational editing | 3–10 seconds |
-| Kuaishou | `kling-v3-omni` | Storyboards and character/voice consistency | 3–15 seconds |
-| Alibaba | Wan 2.7 task-specific models | Efficient generation, reference video, and continuation | 2–15 seconds |
-
-Long-form productions use hybrid assembly: Lumen generates bounded provider clips for the hook and important sections, fills the remaining timeline locally, mixes the existing narration, and keeps the generated caption file alongside the production. As soon as a provider returns its task ID, Lumen persists it before polling so interrupted jobs can resume that known task instead of submitting it again.
-
-## Configuration
-
-### API Keys
-
-#### YouTube Data API (required, free)
-
-1. Create a project in [Google Cloud Console](https://console.cloud.google.com/)
-2. Enable **YouTube Data API v3**
-3. Create an OAuth 2.0 client (**Desktop app**, not Web application)
-4. Save the JSON as `config/credentials.json`; AgentTube uses its configured loopback redirect URI exactly
-
-#### OpenAI
-
-1. Get a key from [platform.openai.com](https://platform.openai.com/)
-2. Set `OPENAI_API_KEY` in `.env`
-
-#### OpenRouter (easiest — one key, all models)
-
-1. Get a key from [openrouter.ai/keys](https://openrouter.ai/keys)
-2. Set `OPENROUTER_API_KEY` in `.env`
-
-#### Google Gemini
-
-1. Get a key from [Google AI Studio](https://aistudio.google.com/)
-2. Set `GEMINI_API_KEY` in `.env`
-
-#### Kimi / MiMo / GLM
-
-| Provider | Get key at | Env var |
-|----------|-----------|---------|
-| Kimi (Moonshot AI) | [platform.kimi.ai](https://platform.kimi.ai) | `MOONSHOT_API_KEY` |
-| MiMo (Xiaomi) | [mimo.mi.com](https://mimo.mi.com) | `MIMO_API_KEY` |
-| GLM (Zhipu AI) | [z.ai](https://z.ai) | `GLM_API_KEY` |
-
-### Environment Variables
-
-```env
-# AI provider — pick one (or use OpenRouter for access to all)
-OPENAI_API_KEY=sk-...
-# OPENROUTER_API_KEY=sk-or-...
-# GEMINI_API_KEY=...
-# MOONSHOT_API_KEY=...
-# MIMO_API_KEY=...
-# GLM_API_KEY=...
-
-# Optional: premium TTS
-# ELEVENLABS_API_KEY=...
-# ELEVENLABS_VOICE_ID=...
-
-# Optional: AI video generation
-# VIDEO_PROVIDER=slideshow # auto, seedance, minimax_h3, google_omni, kling, wan
-# VIDEO_GENERATION_MODE=hybrid
-# VIDEO_MAX_GENERATED_SECONDS=60
-# REPLICATE_API_TOKEN=...  # Seedance 2.5
-# MINIMAX_API_KEY=...      # MiniMax H3
-# KLING_ACCESS_KEY=...
-# KLING_SECRET_KEY=...
-# DASHSCOPE_API_KEY=...    # Wan 2.7
-
-# App config
-NODE_ENV=production
-PORT=3456
-CHANNEL_NAME=Your Channel Name
-TARGET_AUDIENCE=Your target audience
-YOUTUBE_REGION=US
-DEFAULT_PRIVACY_STATUS=private
-
-# Optional recovery tuning (defaults shown)
-MAX_CONCURRENT_JOBS=1
-GENERATION_STAGE_MAX_ATTEMPTS=2
-GENERATION_RETRY_BASE_MS=1000
-
-# Optional: protect mutating API routes (POST /generate, /publish)
-# API_KEY=some-long-random-string
-
-# Optional anonymous activation milestones (off by default; HTTPS endpoint required)
-# ANONYMOUS_TELEMETRY_ENABLED=false
-# ANONYMOUS_TELEMETRY_ENDPOINT=https://your-collector.example/events
-```
-
-### Activation measurement and privacy
-
-The dashboard calculates setup, first-real-MP4, approval, publication, and repeat-generation milestones locally from SQLite and files on disk. A video counts only when a non-simulated `.mp4` with an MP4 container signature still exists.
-
-Anonymous milestone reporting is disabled by default and has no built-in collector. It activates only when you explicitly set both telemetry variables. The allowlisted payload contains the milestone name and time, Lumen version, OS family, Node major version, and a random installation ID. It never includes credentials, channel data, prompts, topics, titles, filenames, or video contents.
-
-## Automation Schedule
-
-```mermaid
-gantt
-    title Daily Pipeline
-    dateFormat HH:mm
-    axisFormat %H:%M
-
-    section Content
-    Generate content (strategy + script + thumbnail + SEO) :06:00, 2h
-
-    section Publishing
-    Process publishing queue :crit, 08:00, 14h
-
-    section Analytics
-    Collect analytics     :09:00, 1h
-    Run optimizations     :22:00, 1h
-```
-
-The scheduler runs automatically after `npm start`. Content generation at 06:00, publishing queue processed every 15 minutes, analytics at 09:00, optimization at 22:00. Weekly strategy reviews run on Sundays.
-
-When an active channel strategy exists, the 06:00 generation check uses its cadence and launches an autonomous research-and-production run when the content buffer needs work. Without an active strategy, the original topic-selection flow remains in place.
-
-Daily analytics collection backfills each real publication's 24-hour and 7-day evidence windows. Recommendations require at least two real measurements, and format or style comparisons require at least two videos in each compared group.
-
-## API
-
-```bash
-# health check
-curl http://localhost:3456/health
-
-# queue a video-generation job (send x-api-key if API_KEY is set in .env)
-curl -X POST http://localhost:3456/generate \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: $API_KEY" \
-  -d '{"topic": "Top 10 Life Hacks", "style": "list"}'
-
-# inspect the returned background job
-curl http://localhost:3456/api/jobs/:jobId
-
-# resume a failed/interrupted job from its first incomplete checkpoint
-curl -X POST http://localhost:3456/api/jobs/:jobId/resume \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: $API_KEY" \
-  -d '{}'
-
-# intentionally regenerate a selected stage and everything after it
-curl -X POST http://localhost:3456/api/jobs/:jobId/resume \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: $API_KEY" \
-  -d '{"stage":"thumbnail"}'
-
-# inspect the latest production-readiness evidence
-curl http://localhost:3456/api/readiness
-
-# run harmless live probes; add {"includePaidMedia":true} only to test paid image generation
-curl -X POST http://localhost:3456/api/readiness/run \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: $API_KEY" \
-  -d '{"includePaidMedia":false}'
-
-# save a channel strategy
-curl -X PUT http://localhost:3456/api/operator/strategy \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: $API_KEY" \
-  -d '{"objective":"Own practical AI automation for small teams","audience":"Small business operators","contentPillars":["AI workflows","Automation playbooks"],"cadencePerWeek":2,"videosPerRun":2,"defaultFormat":"tutorial","defaultLength":"medium","primaryKpi":"subscribers","targetValue":100,"targetWindowDays":28,"monthlyBudget":250,"outcomeCurrency":"USD","status":"draft"}'
-
-# activate the saved strategy and start a background operator run
-curl -X POST http://localhost:3456/api/operator/start \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: $API_KEY" \
-  -d '{}'
-
-# resume an interrupted operator run from its saved plan
-curl -X POST http://localhost:3456/api/operator/runs/:runId/resume \
-  -H "x-api-key: $API_KEY"
-
-# view schedule
-curl http://localhost:3456/schedule
-
-# get analytics
-curl http://localhost:3456/analytics
-
-# get the goal-aligned Outcome & ROI Studio summary
-curl http://localhost:3456/api/outcomes
-
-# approve an evidence-backed learning for future autonomous plans
-curl -X POST http://localhost:3456/api/learning/recommendations/:recommendationId/approve \
-  -H "x-api-key: $API_KEY"
-
-# inspect controlled experiments and eligible published videos
-curl http://localhost:3456/api/experiments
-
-# create and approve a packaging test plan (start/adopt are separate confirmed actions)
-curl -X POST http://localhost:3456/api/experiments \
-  -H "Content-Type: application/json" -H "x-api-key: $API_KEY" \
-  -d '{"productionId":"production-id","armDurationHours":48,"minImpressions":1000}'
-curl -X POST http://localhost:3456/api/experiments/:experimentId/approve \
-  -H "Content-Type: application/json" -H "x-api-key: $API_KEY" \
-  -d '{"confirmed":true}'
-
-# inspect, edit, and approve content before scheduling
-curl http://localhost:3456/api/content/:contentId
-curl -X POST http://localhost:3456/api/content/:contentId/approve \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: $API_KEY" \
-  -d '{"privacyStatus":"private","factChecked":true,"rightsConfirmed":true}'
-```
-
-## Production Pipeline
-
-```mermaid
-flowchart LR
-    subgraph TTS["Audio Generation"]
-        direction TB
-        EL[ElevenLabs v3] -.->|fallback| OA[OpenAI TTS]
-        OA -.->|fallback| SIM1[Simulation]
-    end
-
-    subgraph IMG["Image Generation"]
-        direction TB
-        GPT[GPT Image 2] -.->|fallback| SIM2[Simulation]
-    end
-
-    subgraph VID["Video Assembly"]
-        direction TB
-        WAN[Wan 2.7 I2V] -.->|fallback| PW[Playwright Slideshow]
-        PW -.->|fallback| SIM3[Simulation]
-    end
-
-    TTS --> MIX[FFmpeg Mux]
-    IMG --> VID
-    VID --> MIX
-    MIX --> OUT[Final Video]
-```
-
-Each stage has graceful fallbacks. If a paid API key isn't configured, the system simulates that step so the rest of the pipeline still runs.
-
-## Extending
-
-### Custom AI provider
-
-```javascript
-// utils/ai-service.js
-const Anthropic = require('@anthropic-ai/sdk');
-
-class ClaudeAIService {
-  constructor(apiKey) {
-    this.client = new Anthropic({ apiKey });
-  }
-  async generateContent(prompt) {
-    const message = await this.client.messages.create({
-      model: 'claude-fable-5',
-      max_tokens: 1024,
-      messages: [{ role: 'user', content: prompt }]
-    });
-    return message.content[0].text;
-  }
-}
-```
-
-### Custom content types
-
-```javascript
-// agents/content-strategy-agent.js
-const contentTypes = {
-  'podcast': {
-    duration: '10-15 minutes',
-    style: 'conversational',
-    thumbnail: 'podcast-style'
-  },
-};
-```
-
-## Project Structure
+# YouTube Bulk Scheduler
+
+A **single-owner, self-hosted** system for a US-targeted children's/cartoon
+YouTube channel. You create the MP4 videos yourself; this application handles
+everything after that.
 
 ```
-youtube-automation-agent/
-├── agents/          # one file per agent
-├── config/          # credentials, example configs
-├── database/        # SQLite schema and access layer
-├── data/            # generated content and assets
-├── schedules/       # cron-based automation
-├── utils/           # AI services, autonomous operator, logging, credential management
-├── .github/         # CI workflow (lint + tests on every push/PR)
-└── index.js         # Express server + agent initialization
+You select 100 / 1,000 MP4 files (desktop or phone)
+        |
+        v
+[ Bulk ingest ]  ->  persistent queue (SQLite, survives restarts)
+        |
+        v
+[ Slot engine ]  ->  America/New_York, 5 slots/day, never a passed slot
+        |
+        v
+[ Active set ]   ->  today's remaining slots + tomorrow's 5-video buffer
+                     (normally <= 10 videos touched by any AI provider)
+        |
+        v
+[ Video understanding ]  ffprobe facts + real frames from the MP4
+        |
+        v
+[ Metadata AI ]   Gemini -> OpenRouter Free #1 -> #2 -> #3   (strict fallback)
+        |
+        v
+   TITLE / DESCRIPTION / KEYWORDS / HASHTAGS
+        |
+        v
+[ Thumbnail AI ]  configured image provider
+        |  failure / rate-limit / unusable
+        v
+   best real frame from the MP4 (never a paid call)
+        |
+        v
+[ YouTube ]       resumable videos.insert, private + publishAt (UTC)
+        |
+        v
+[ Confirm ]       videos.list read-back  ->  mark source eligible for cleanup
+        |
+        v
+[ Cleanup worker ]  within 24h: delete local source + Google Drive source
+        |
+        v
+[ Next video enters active processing ]  ->  keep tomorrow's 5-video buffer
 ```
 
-## Troubleshooting
-
-| Problem | Fix |
-|---------|-----|
-| `Missing credentials for: an AI provider` | Configure any one provider with `npm run credentials:setup` — OpenAI is not required |
-| `'ffmpeg' is not recognized` / no .mp4 produced | Run `npm install` (fetches the bundled binary), or install FFmpeg and set `FFMPEG_PATH` |
-| Video marked `simulated`, nothing uploads | Check the ✗ lines in the startup capability check — a key or FFmpeg is missing |
-| "Processing publish queue" but nothing publishes | The queue log now shows what's waiting; content publishes at its scheduled time (default: next day 2 PM) |
-| YouTube API quota exceeded | Check quotas in Google Cloud Console; reduce posting frequency |
-| Content generation failed | Verify API keys and credits; check `logs/` |
-| Publishing failed | Re-authenticate YouTube OAuth tokens; check video format |
-
-Enable debug logging:
-
-```bash
-NODE_ENV=development DEBUG_MODE=true npm start
-```
-
-## More Tools by darkzOGx
-
-If this was useful, check out:
-
-- [darkzloop](https://github.com/darkzOGx/darkzloop): terminal agent runner that turns any LLM into a disciplined software engineer (FSM control, model-agnostic, BYO auth)
-- [darkzBOX](https://github.com/darkzOGx/darkzBOX): open-source Instantly.ai clone with smart automated email replies
-- [open-sales-researcher](https://github.com/darkzOGx/open-sales-researcher): autonomous B2B company research. Works with Claude Code, Cursor, Copilot.
-- [darkzseo](https://github.com/darkzOGx/darkzseo): SEO tooling
-
-## Built by
-
-[@darkzOGx](https://github.com/darkzOGx), a solo builder shipping AI automation and developer tools. Find me on [X](https://x.com/darkzOGx) and [laderalabs.io](https://laderalabs.io).
-
-If Lumen saves you time, a star helps it reach more developers.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for ground rules (short version: one focused concern per PR, no lockfile churn, lint + tests must pass). For questions and setup help, use [Discussions](https://github.com/darkzOGx/youtube-automation-agent/discussions) — Issues is for bugs.
-
-1. Fork the repo
-2. Create a feature branch
-3. Make changes and add tests
-4. Submit a PR
-
-```bash
-git clone <your-fork>
-cd youtube-automation-agent
-npm install
-npm run lint   # must pass — CI runs this on every PR
-npm test
-```
-
-## License
-
-MIT — see [LICENSE](LICENSE).
-
-## Acknowledgments
-
-- [OpenAI](https://openai.com/) — GPT-5.6 Sol, GPT Image 2, GPT-4o-mini-tts
-- [OpenRouter](https://openrouter.ai/) — unified multi-model API
-- [Google](https://ai.google.dev/) — Gemini 3.7 Flash, Gemini 3.1 Flash Image, Gemini 3.1 Flash TTS
-- [Google Cloud](https://console.cloud.google.com/) — YouTube Data API
-- [Moonshot AI](https://www.moonshot.ai/) — Kimi K3
-- [Xiaomi](https://mimo.mi.com/) — MiMo V2.5 Pro
-- [Zhipu AI](https://z.ai/) — GLM-5.3
-- [ElevenLabs](https://elevenlabs.io/) — Eleven v3 TTS
-- [Replicate](https://replicate.com/) — Wan 2.7 video generation
-- [ConstructionBids.ai](https://constructionbids.ai) - AI scans every federal, state & local public works bid and matches you to contracts you'll win.
+**It is not a video generator.** It never creates, replaces, narrates or
+re-encodes a video. It never spends money without you asking it to.
 
 ---
 
-> This tool is for legitimate content creation. Comply with [YouTube's Terms of Service](https://www.youtube.com/t/terms) and Community Guidelines.
+## Table of contents
+
+1. [What it does](#what-it-does)
+2. [Local installation](#local-installation)
+3. [Environment variables](#environment-variables)
+4. [Google Cloud setup](#google-cloud-setup)
+5. [YouTube OAuth setup](#youtube-oauth-setup)
+6. [Google Drive setup](#google-drive-setup)
+7. [Gemini setup](#gemini-setup)
+8. [OpenRouter free-model setup](#openrouter-free-model-setup)
+9. [Thumbnail provider setup](#thumbnail-provider-setup)
+10. [Bulk upload](#bulk-upload)
+11. [The 5/day schedule](#the-5day-schedule)
+12. [The advance buffer](#the-advance-buffer)
+13. [Storage cleanup](#storage-cleanup)
+14. [Failure handling](#failure-handling)
+15. [Local deployment](#local-deployment)
+16. [Render / Railway deployment](#render--railway-deployment)
+17. [Retrying failed videos](#retrying-failed-videos)
+18. [API reference](#api-reference)
+19. [Database schema](#database-schema)
+20. [Tests](#tests)
+21. [Legacy AgentTube app](#legacy-agenttube-app)
+22. [Known limitations](#known-limitations)
+
+---
+
+## What it does
+
+| Stage | What happens | Never happens |
+|---|---|---|
+| Bulk upload | MP4 files are queued one request at a time, streamed straight to disk | Nothing is sent to an AI provider on upload |
+| Queue | Every file gets a durable row with position, status and error state | Nothing is processed in bulk up front |
+| Slot assignment | Today's remaining ET slots + tomorrow's 5 | A slot that already passed is never used |
+| Video understanding | ffprobe facts + 4 real frames + a local visual brief | The filename is not trusted over the video |
+| Metadata | One final title, description, 8–15 tags, up to 3 hashtags, category, Made-for-Kids, synthetic-media flag | No five-option menu, no manual approval step |
+| Thumbnail | Configured image model, validated to 1280x720 | No paid API call is made to recover a failure |
+| Upload | Resumable `videos.insert`, `privacyStatus: private`, `publishAt` in UTC | The same job is never uploaded twice |
+| Confirm | `videos.list` read-back, then the source is marked eligible | Deletion never happens on an uncertain outcome |
+| Cleanup | Local file + Drive file deleted, 6–24 h after confirmation | A failed upload is never deleted |
+
+### Safety gates that are always on
+
+- **Child safety screen** — generated metadata is rejected if it contains
+  adult language, clickbait phrasing ("you won't believe", "shocking"), a
+  hashtag wall, or unsupported superlatives. A rejected result falls through to
+  the next AI provider instead of reaching YouTube.
+- **Made for Kids** — read live from the channel at startup and honoured.
+  Never changed automatically. Override only with `YOUTUBE_MADE_FOR_KIDS`.
+- **Synthetic media disclosure** — `auto` (model decides per video and reports
+  its confidence), `true`, or `false`. Never silently hard-coded.
+- **No fabricated videos** — when the queue is empty the dashboard says
+  `QUEUE EMPTY` and scheduling stops.
+- **No accidental paid model** — `OPENROUTER_FREE_ONLY=true` (default) rejects
+  any configured model that is not free. Nothing is ever defaulted.
+
+---
+
+## Local installation
+
+```bash
+# 1. Node 22.5+ (uses the built-in node:sqlite - no native build needed)
+node -v
+
+# 2. Clone and install
+git clone <your-repo-url>
+cd Youtube
+npm install
+
+# 3. FFmpeg - needed for video analysis and the thumbnail frame fallback.
+#    Auto-detected from PATH, or from the bundled @ffmpeg-installer package.
+ffmpeg -version
+# If yours lives somewhere unusual:
+#   FFMPEG_PATH=/usr/local/bin/ffmpeg
+#   FFPROBE_PATH=/usr/local/bin/ffprobe
+
+# 4. Configure
+cp .env.example .env
+# edit .env - see the next section
+
+# 5. Authorize Google (opens your browser)
+npm run auth
+
+# 6. Start
+npm start
+```
+
+Then open <http://localhost:3000> and sign in with the Google address you put
+in `OWNER_EMAIL`.
+
+### `npm run auth` on a headless machine
+
+`scripts/authorize.js` starts a loopback server on `127.0.0.1` (random port,
+5-minute timeout), prints an authorization URL, and captures the redirect.
+Works over SSH: open the printed URL on any machine where you are signed into
+the owner Google account.
+
+Tokens are written to `config/tokens.json` with `0600` permissions. That file
+is gitignored and is **never** sent to the browser.
+
+---
+
+## Environment variables
+
+See [`.env.example`](.env.example) for the complete, commented template. The
+essentials:
+
+```bash
+# --- required to boot ---
+OWNER_EMAIL=your-google-address@example.com
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+ENCRYPTION_KEY=...                 # node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+# --- required to do anything useful ---
+GEMINI_API_KEY=...
+OPENROUTER_API_KEY_1=...  OPENROUTER_MODEL_1=...:free
+OPENROUTER_API_KEY_2=...  OPENROUTER_MODEL_2=...:free
+OPENROUTER_API_KEY_3=...  OPENROUTER_MODEL_3=...:free
+
+# --- schedule ---
+TIMEZONE=America/New_York
+PUBLISH_SLOT_TIMES=08:00,14:00,16:00,18:00,20:00
+DAILY_VIDEO_COUNT=5
+
+# --- cleanup ---
+DELETE_AFTER_SUCCESSFUL_YOUTUBE_SCHEDULE=true
+DELETE_DELAY_HOURS=6
+DELETE_MAX_HOURS=24
+
+# --- storage ---
+GOOGLE_DRIVE_ENABLED=false
+GOOGLE_DRIVE_FOLDER_ID=...
+```
+
+The server **refuses to boot** without `OWNER_EMAIL` and the Google OAuth
+credentials, and prints exactly what is missing. Everything else degrades
+gracefully and is reported on the dashboard.
+
+---
+
+## Google Cloud setup
+
+Your existing project works as-is:
+
+- **Project name:** YouTube Shorts Auto Scheduler
+- **Project ID:** `precise-mystery-509108-q1`
+
+APIs that must be enabled (you already have them):
+
+| API | Why |
+|---|---|
+| YouTube Data API v3 | upload, schedule, confirm |
+| Google Drive API | optional source-file mirror + cleanup |
+| Identity Toolkit API | Google Sign-In for owner auth |
+
+### Scopes requested
+
+```
+https://www.googleapis.com/auth/youtube.upload      # upload + schedule
+https://www.googleapis.com/auth/youtube.readonly   # confirm / reconcile / channel
+https://www.googleapis.com/auth/drive.file         # ONLY files this app created
+openid email profile                                # owner identity
+```
+
+`drive.file` is deliberately the narrowest practical Drive scope: the app can
+see and delete the files **it** uploaded, and nothing else in your Drive.
+`drive.readonly` is **not** requested.
+
+### OAuth client
+
+Create (or reuse) an **OAuth 2.0 Web client**:
+
+- **Authorized JavaScript origins** — the origin of this app, e.g.
+  `http://localhost:3000` locally, `https://your-app.onrender.com` on Render.
+- **Authorized redirect URIs** — `${APP_URL}/api/auth/google/callback`
+
+> The old project's `youtube.upload` + `drive.file` + `drive.readonly`
+> combination is not reused blindly: `drive.readonly` is dropped, and
+> `youtube.readonly` is added because this app needs to *confirm* uploads.
+
+---
+
+## YouTube OAuth setup
+
+1. Google Cloud Console → **APIs & Services → OAuth consent screen**.
+   - User type: **External** (or Internal if you have Workspace).
+   - Add the owner address under **Test users** while the app is in testing.
+2. Add the scopes listed above.
+3. Create credentials → **OAuth client ID → Web application**.
+4. Put the client id and secret in `.env`.
+5. `npm run auth` → approve in the browser.
+
+`YOUTUBE_API_KEY` is optional and only needed for unauthenticated read calls.
+Uploads always use OAuth.
+
+---
+
+## Google Drive setup
+
+Optional. When enabled, each source MP4 is mirrored into a Drive folder before
+anything destructive happens, and deleted from Drive after the YouTube schedule
+is confirmed.
+
+```bash
+GOOGLE_DRIVE_ENABLED=true
+GOOGLE_DRIVE_FOLDER_ID=<id of the target folder>
+```
+
+Create a folder in Drive, open it, and copy the id from the URL:
+
+```
+https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+```
+
+The folder must be owned by (or shared with) the same Google account that
+authorizes the app, and that account needs edit access to it.
+
+If `GOOGLE_DRIVE_ENABLED=false`, everything works local-only and the dashboard
+shows `Drive: disabled`.
+
+---
+
+## Gemini setup
+
+1. Go to <https://aistudio.google.com/apikey>.
+2. Create an API key (free tier is enough).
+3. `GEMINI_API_KEY=...`
+4. Optionally change the model: `GEMINI_MODEL=gemini-2.5-flash`
+
+Gemini is **first** in the chain. If it is not configured, the chain starts at
+OpenRouter #1 and the dashboard says so.
+
+---
+
+## OpenRouter free-model setup
+
+1. Create an account at <https://openrouter.ai>.
+2. Add credits **only if you intend to** — the free models need none.
+3. Create API keys (one per fallback, or reuse the same key three times).
+4. Configure all three:
+
+```bash
+OPENROUTER_API_KEY_1=sk-or-v1-...
+OPENROUTER_MODEL_1=deepseek/deepseek-chat-v3.1:free
+
+OPENROUTER_API_KEY_2=sk-or-v1-...
+OPENROUTER_MODEL_2=qwen/qwen3-coder:free
+
+OPENROUTER_API_KEY_3=sk-or-v1-...
+OPENROUTER_MODEL_3=meta-llama/llama-3.3-70b-instruct:free
+```
+
+The model slugs above are **examples only**. Nothing is hard-coded: set
+whatever free models you like and the chain follows your configuration.
+
+`OPENROUTER_FREE_ONLY=true` (the default) rejects any configured slug that does
+not look like a free model, so a paid model can never be selected by accident.
+Set it to `false` only if you deliberately want to opt out.
+
+Browse free models: <https://openrouter.ai/models?q=free>
+
+---
+
+## Thumbnail provider setup
+
+A **separate** provider from the four metadata models.
+
+```bash
+THUMBNAIL_PROVIDER=openrouter     # openrouter | gemini | pollinations | none
+THUMBNAIL_PROVIDER_KEY=sk-or-v1-...
+THUMBNAIL_PROVIDER_MODEL=some/free-image-model:free
+```
+
+| Provider | Key needed | Notes |
+|---|---|---|
+| `openrouter` | yes | any free image-capable model |
+| `gemini` | yes | an image-capable Gemini model |
+| `pollinations` | no | free, no key |
+| `none` | no | always uses the video frame fallback |
+
+`THUMBNAIL_FREE_ONLY=true` (default) applies the same free-model guard.
+
+**Fallback rule:** if the provider fails, rate-limits, times out, or returns an
+unusable image, the system extracts the best real frame from the MP4 (scored
+locally with `sharp` for brightness and contrast), normalises it to 1280x720,
+and uploads that. **No paid API call is ever made to recover a thumbnail.**
+
+---
+
+## Bulk upload
+
+The dashboard (`/`) accepts files two ways:
+
+- **Select files** — the file picker, multi-select.
+- **Drag and drop** — drop files *or a whole folder* onto the dropzone. Dropped
+  folders are walked recursively.
+
+Both work from a desktop browser and a phone browser.
+
+### How the transport works
+
+One HTTP request per file, raw body, streamed straight to disk:
+
+```
+POST /api/ingest
+Content-Type: application/octet-stream
+x-filename: My Cartoon.mp4
+x-file-size: 12345678
+x-sha256: <hex>
+<bytes>
+```
+
+This is deliberate: 1,000 concurrent multipart uploads from a phone would be
+fragile, and streaming means a 2 GB file never sits in memory. You get per-file
+progress and per-file error handling, and one bad file never aborts the batch.
+
+Uploads are sequential by default (`WORKER_CONCURRENCY=1`).
+
+### What is stored per queued video
+
+queue id · filename · local path · file size · duration · width/height · codecs
+· container · SHA-256 · queue position · upload time · processing status ·
+AI metadata status · thumbnail status · YouTube status · scheduled time (ET +
+UTC) · slot date/index · YouTube video id · error state · retry count ·
+cleanup state · timestamps.
+
+### Duplicate suppression
+
+If you send `x-sha256` and the same content is already queued (and not yet
+scheduled), the request returns `409 duplicate_source` instead of queueing it
+twice. The file is removed from disk.
+
+---
+
+## The 5/day schedule
+
+Exactly **5 videos every day**, including weekends. No exceptions.
+
+| # | America/New_York |
+|---|---|
+| 1 | 08:00 AM |
+| 2 | 02:00 PM |
+| 3 | 04:00 PM |
+| 4 | 06:00 PM |
+| 5 | 08:00 PM |
+
+`America/New_York` is the **master** timezone. The engine uses the IANA name
+via `Intl.DateTimeFormat`, never a fixed UTC offset, so:
+
+- EST (UTC−5) and EDT (UTC−4) are both handled automatically.
+- The spring-forward gap and the fall-back overlap resolve deterministically.
+- Month and year boundaries roll correctly.
+- Midnight is evaluated in ET, not in the server's local zone.
+
+Example conversions the dashboard also shows (IST, for the operator):
+
+| ET | IST |
+|---|---|
+| 08:00 | 05:30 PM |
+| 02:00 PM | 11:30 PM |
+| 04:00 PM | 01:30 AM |
+| 06:00 PM | 03:30 AM |
+| 08:00 PM | 05:30 AM |
+
+`DISPLAY_TIMEZONES=America/New_York,Asia/Kolkata` controls which zones are
+shown. ET always remains authoritative.
+
+### Slot rules
+
+- A slot that starts within `SLOT_LEAD_MINUTES` (default 5) is not filled.
+- A slot that has already passed is never used, and any stale planned slot is
+  released back to the queue on every sweep.
+- A day can never receive a 6th video.
+
+---
+
+## The advance buffer
+
+The system maintains a rolling buffer of **the next day's 5 videos**, whenever
+the queue has enough to fill it.
+
+**25 videos uploaded at 07:00 ET:**
+
+```
+Videos  1–5   -> today's five slots        (fully prepared now)
+Videos  6–10  -> tomorrow's five slots     (fully prepared in advance)
+Videos 11–25  -> stay in the queue, NOT AI-processed yet
+```
+
+**Upload after 2 of today's slots have passed:**
+
+```
+2 videos -> today's 2 remaining slots
+5 videos -> tomorrow's advance buffer
+rest     -> stay queued
+```
+
+Nothing is ever forced into a slot that has passed.
+
+### The cost-control guarantee
+
+At normal operation the active AI-processing set is **at most 10 videos**
+(today's remaining + tomorrow's 5). Uploading 1,000 videos does **not** send
+1,000 videos to Gemini or OpenRouter — the other 990 stay in the SQLite queue
+and are never touched by an AI provider until the buffer rolls forward.
+
+`MAX_ACTIVE_VIDEOS=10` is a hard ceiling so a misconfiguration cannot explode
+your API usage.
+
+---
+
+## Storage cleanup
+
+### Lifecycle
+
+```
+ingest (local disk)
+   -> optional Drive mirror copy
+   -> processing (metadata + thumbnail)
+   -> YouTube upload + schedule
+   -> videos.list confirmation read-back
+   -> cleanup_status = 'eligible', cleanup_eligible_at = now + DELETE_DELAY_HOURS
+   -> cleanup worker sweeps
+   -> delete local  ->  delete Drive  ->  record result
+```
+
+### Rules enforced
+
+Deletion happens **only** when all of these are true:
+
+- `youtube_status` is `scheduled` or `published`
+- a confirmed `youtube_video_id` exists
+- the upload outcome is **not** uncertain
+- the video is not still processing
+- the thumbnail is `generated` or `fallback`
+- title and description are present
+- a scheduled time is recorded
+- there is still something to delete
+
+Deletion is **skipped** when any of these are true:
+
+- the upload failed
+- the schedule failed
+- the YouTube confirmation is uncertain
+- the video is still processing
+- metadata is incomplete
+- the thumbnail is still required
+- deleting would remove the only recoverable copy
+
+Deletion is **transactional**: local first, then Drive. If either side fails,
+the task is marked `failed`, the video is **not** marked deleted, and the
+failure is shown on the dashboard.
+
+### The toggle
+
+`DELETE_AFTER_SUCCESSFUL_YOUTUBE_SCHEDULE` (default `true`).
+
+- `true` — delete local + Drive after a confirmed schedule.
+- `false` — keep the source files forever; nothing is deleted automatically.
+
+### Timing
+
+- `DELETE_DELAY_HOURS=6` — minimum wait after confirmation, so retries and
+  reconciliation can finish safely.
+- `DELETE_MAX_HOURS=24` — hard ceiling. The requirement is "within 24 hours",
+  and the effective delay is `min(DELETE_DELAY_HOURS, DELETE_MAX_HOURS)`.
+
+The cleanup worker never runs inline with an upload, so a crash can never leave
+a file half-deleted while the YouTube state is still unknown.
+
+---
+
+## Failure handling
+
+### AI metadata chain
+
+```
+Gemini
+  | rate limit / quota / timeout / outage / invalid response / model unavailable
+  v
+OpenRouter Free #1
+  v
+OpenRouter Free #2
+  v
+OpenRouter Free #3
+  v
+PAUSE
+```
+
+If all four fail, the video is parked with `ai_status = 'paused'` and the
+dashboard shows:
+
+- the video id
+- every provider attempted, in order
+- the exact reason each one failed (classified: `rate_limited_or_quota`,
+  `timeout`, `provider_outage`, `network`, `invalid_response`, `auth_or_forbidden`,
+  `model_unavailable`, `bad_request`)
+- the timestamp
+- the retry information
+
+Processing is **not** silently skipped, and no paid provider is substituted.
+A health probe re-runs every `PROVIDER_HEALTH_MS` (5 min); when a provider
+answers again, the paused videos resume automatically.
+
+### Thumbnail
+
+Failure → best real frame from the MP4. Never a paid call.
+
+### YouTube
+
+```
+attempt #1
+  | fail
+  v
+show/log the error
+  | automatic retry ONCE
+  v
+retry succeeds -> continue normally
+  |
+  v
+retry fails -> mark FAILED
+               store: exact API error, HTTP status, operation, timestamp,
+                      retry count, video id, and whether YouTube MAY have
+                      received the upload
+               -> continue to the next queue item
+```
+
+The failed video **stays in the database** with a **Retry** button on the
+dashboard. It is never deleted.
+
+A 4xx error that cannot succeed on retry (e.g. `invalidTitle`) does **not**
+burn the second attempt. A 5xx/408/429, or a response we never received, is
+flagged `youtube_uncertain = 1` — the row is reconciled against
+`videos.list` before any re-upload, so the same video is never uploaded twice.
+
+### Crash recovery
+
+On boot, `reconcileInterrupted()` runs:
+
+- any row stuck in `uploading` with a known video id is confirmed against
+  YouTube and adopted if it exists;
+- otherwise it is returned to the queue with its slot released, so it can never
+  land in a slot that has passed.
+
+Stage checkpoints (`ingest_checkpoints`) store completed artifacts, and every
+artifact is re-validated on disk before it is reused.
+
+---
+
+## Local deployment
+
+```bash
+npm start
+```
+
+The queue lives in `data/scheduler.db`. Uploaded sources live in
+`data/uploads/`. Derived assets (frames, thumbnails) live in `data/derived/`.
+Logs go to `logs/app.log`.
+
+**Honest limitation:** if the PC is off, the worker cannot run, so no new
+videos are uploaded or scheduled while it is down. Once a video *is* scheduled
+on YouTube, YouTube publishes it at the scheduled time independently of this
+application. Missed slots are simply skipped — the system never back-fills.
+
+To keep a local PC running, use `pm2`, `systemd`, or Docker.
+
+### systemd unit
+
+```ini
+[Unit]
+Description=YouTube Bulk Scheduler
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/youtube-bulk-scheduler
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+```
+
+---
+
+## Render / Railway deployment
+
+The queue system needs no rewriting — only the URL and storage paths change.
+
+1. Push the repo.
+2. Create a **Web Service** (not a static site). Node 22.5+.
+3. Build command: `npm install`
+4. Start command: `npm start`
+5. Add a **Persistent Disk** and point `DATABASE_PATH`, `UPLOAD_DIR` and
+   `DERIVED_DIR` at it. Without a disk, the queue is lost on every deploy.
+6. Set the environment variables from `.env.example`.
+7. Set `APP_URL=https://your-service.onrender.com`.
+8. Add that origin and `${APP_URL}/api/auth/google/callback` to the OAuth
+   client's authorized origins and redirect URIs.
+9. `SECURE_COOKIES=true` (Render/Railway terminate TLS).
+
+`/api/healthz` is public and unauthenticated for platform health checks.
+
+> A powered-off local PC cannot keep uploading. A Render/Railway worker can,
+> because it stays online. That is the only operational difference.
+
+---
+
+## Retrying failed videos
+
+### From the dashboard
+
+Every failed row shows the exact reason, the HTTP status, the operation, the
+retry count, and — when the outcome was uncertain — a note that YouTube may
+have received the upload. Press **Retry**.
+
+### In bulk
+
+- **Retry failed** — re-queues every failed video at the back of the queue.
+- **Clear failed** — removes the failed rows. Source files on disk are kept.
+
+### What retry does
+
+1. Releases any slot the video held.
+2. Clears its pipeline state (`resetVideo`) — metadata, thumbnail and upload
+   are all regenerated.
+3. Preserves the YouTube video id **only** if the previous outcome was
+   uncertain, so reconciliation can find the video YouTube already has.
+4. Puts it at the back of the queue.
+5. Re-runs `topUp()` so it re-enters the active window at the next free slot.
+
+---
+
+## API reference
+
+Every endpoint below exists in `routes/api.js`. Nothing here is a stub.
+
+Auth: all routes except `/api/healthz`, `/api/auth/*` and the static login page
+require the owner session cookie (`HttpOnly`, `SameSite=Lax`).
+
+| Method | Endpoint | Purpose | Auth | Input | Output |
+|---|---|---|---|---|---|
+| GET | `/api/healthz` | Liveness probe for the platform | none | – | `{ok, service, timezone, now}` |
+| GET | `/api/auth/config` | Is Google OAuth configured? | none | – | `{googleConfigured, ownerConfigured, scopes, redirectUri}` |
+| GET | `/api/auth/google/start` | Begin owner sign-in | none | – | 302 to Google |
+| GET | `/api/auth/google/callback` | OAuth return | none | `code`, `state` | 302 to `/` |
+| GET | `/api/auth/session` | Current session | cookie | – | `{authenticated, subject, name, expiresAt}` |
+| POST | `/api/auth/logout` | Clear the session | none | – | `{ok}` |
+| GET | `/api/dashboard` | Today / buffer / queue / processing / failed / paused | owner | – | full dashboard payload |
+| GET | `/api/dashboard/providers` | Status of all 4 metadata models + thumbnail + trends | owner | – | `{metadata[], thumbnail, trends}` |
+| GET | `/api/dashboard/videos` | Queue listing | owner | `?status=&youtubeStatus=&limit=` | `{count, videos[]}` |
+| GET | `/api/dashboard/videos/:id` | One video + its provider attempt log | owner | – | `{video, attempts[]}` |
+| POST | `/api/ingest` | Upload one MP4 into the queue | owner | raw body + `x-filename`, `x-file-size`, `x-sha256` | `{ok, video, assigned[], queueTotal}` |
+| POST | `/api/queue/topup` | Force a buffer top-up | owner | – | `{assigned[], queueEmpty, activeCount}` |
+| POST | `/api/queue/retry/:id` | Re-queue one failed video | owner | – | `{ok, videoId}` |
+| POST | `/api/queue/retry-failed` | Re-queue every failed video | owner | – | `{retried}` |
+| POST | `/api/queue/clear-failed` | Drop failed rows (files kept) | owner | – | `{cleared}` |
+| POST | `/api/worker/run` | Run one pipeline pass | owner | – | `{processed, scheduled, failed, paused, details[]}` |
+| GET | `/api/worker/status` | Worker state | owner | – | `{running, current, concurrency}` |
+| POST | `/api/worker/reconcile` | Resolve crash-ambiguous rows | owner | – | `{resolved, checked}` |
+| POST | `/api/worker/resume-paused` | Re-probe providers, un-pause | owner | – | `{resumed, provider}` |
+| POST | `/api/cleanup/run` | Run one cleanup sweep | owner | – | `{due, deleted, failed, deferred, errors[]}` |
+| GET | `/api/cleanup/status` | Cleanup state | owner | – | `{pending, failed, deleteAfterYouTube, delayHours}` |
+| GET | `/api/youtube/status` | Connection, channel, madeForKids, uploads today | owner | – | `{connected, channel, insertsToday, …}` |
+| GET | `/api/youtube/videos/:id` | Confirm a video exists on YouTube | owner | – | `{exists, privacyStatus, publishAt, …}` |
+| GET | `/api/storage/summary` | Local + Drive usage, pending deletions | owner | – | `{local, drive, pendingDeletion, failedDeletion}` |
+| GET | `/api/settings` | Effective schedule/storage config | owner | – | `{timezone, slotTimes, videosPerDay, deleteAfterYouTube, …}` |
+| GET | `/api/assets/:id/:kind` | Serve a thumbnail (`kind=thumbnail`) | owner | – | image bytes, or 403/404 |
+
+Responses never contain local filesystem paths, Drive file ids, tokens or keys.
+
+---
+
+## Database schema
+
+SQLite, via Node's built-in `node:sqlite` (same engine and file format as the
+legacy app's `sqlite3` package, but no native compilation). Schema lives in
+`database/ingest-db.js`.
+
+### `ingest_videos` — the queue
+
+One row per uploaded MP4. The authoritative state of everything.
+
+| Column | Meaning |
+|---|---|
+| `id` | `ing_<uuid>` primary key |
+| `filename` / `original_name` | stored name / name the browser sent |
+| `local_path` / `tmp_path` | on-disk source |
+| `file_size`, `duration_seconds`, `width`, `height`, `video_codec`, `audio_codec`, `container` | ffprobe facts |
+| `sha256` | content hash, used for duplicate suppression |
+| `queue_position` | 1-based position in the un-consumed queue |
+| `drive_file_id` | id of the Drive copy, written after the local→Drive mirror |
+| `uploaded_at` | ingest time |
+| `status` | `queued` → `processing` → `analyzing` → `uploading` → `scheduled` / `failed` / `paused` |
+| `ai_status` | `pending` / `running` / `done` / `failed` / `paused` |
+| `ai_provider`, `ai_model`, `ai_error`, `ai_round`, `ai_attempts`, `ai_paused_at` | which model won, and why others did not |
+| `thumbnail_status`, `thumbnail_path`, `thumbnail_source`, `thumbnail_error` | `generated` (AI) or `fallback` (video frame) |
+| `youtube_status` | `pending` / `uploading` / `scheduled` / `published` / `failed` |
+| `youtube_video_id`, `youtube_url`, `youtube_error`, `youtube_http_status`, `youtube_operation`, `youtube_retry_count`, `youtube_uncertain` | upload outcome and audit trail |
+| `slot_date_et`, `slot_index`, `slot_time_et`, `scheduled_at_utc`, `publish_at` | the assigned slot |
+| `title`, `description`, `tags`, `hashtags`, `category_id`, `made_for_kids`, `contains_synthetic`, `synthetic_confidence` | generated metadata |
+| `analysis_json` | the visual brief sent to the model |
+| `cleanup_status`, `cleanup_eligible_at`, `cleanup_error`, `cleanup_attempts`, `local_deleted_at`, `drive_deleted_at` | deletion lifecycle |
+
+### `slot_assignments`
+
+One row per (ET date, slot index). `UNIQUE(slot_date_et, slot_index)` makes it
+impossible at the database level for a day to receive a 6th video.
+
+### `provider_attempts`
+
+Append-only audit log of every AI call: video, stage, provider, model, status,
+HTTP status, error code, message, duration.
+
+### `cleanup_tasks`
+
+One row per eligible video: local path, Drive file id, eligible-at, per-side
+results, attempt count.
+
+### `ingest_checkpoints`
+
+`PRIMARY KEY (video_id, stage)`. Stores completed stage artifacts so a crash
+resumes instead of repeating provider work. Artifacts are re-validated against
+disk before reuse.
+
+### `settings`
+
+Key/value store (schema version, single-use OAuth state values).
+
+---
+
+## Tests
+
+```bash
+npm test              # the new system's unit suite (99 assertions)
+npm run test:integration  # end-to-end pipeline suite (16 assertions)
+npm run test:legacy    # the original AgentTube suite (unchanged)
+npm run lint
+```
+
+The unit suite (`tests/run-ingest-tests.js`) has **99 assertions** across 12
+suites, with no test framework and no network access. It covers:
+
+| Area | Covered |
+|---|---|
+| Slot engine | IANA zone vs fixed offset, exact 5 slots, remaining-today, spring-forward gap, fall-back overlap, DST stability, month/year boundaries, midnight, ET+IST display |
+| Queue / buffer | 25 uploads → 5+5+15, the 5/day ceiling, partially-used days, passed slots, stale-slot release, QUEUE EMPTY, resume on upload, buffer roll-forward |
+| Persistence | DB reopen survives restart, checkpoint artifact re-validation, failed rows retained, retry ordering, clear-failed keeps files |
+| AI chain | deterministic order, skipped providers, fall-through on failure, all-four-down pause + full ledger, no-provider refusal, paid-model rejection, unusable-metadata fall-through, error classification, child-safety screen, JSON tolerance |
+| Thumbnail | AI success + validation, AI failure → real frame, unusable image rejected, `provider=none` skips AI, paid model rejected, frame scoring |
+| MP4 | valid file accepted with real probe facts, non-video rejected, missing file rejected, frame extraction, filename neutralisation |
+| YouTube | upload success, `private` + UTC `publishAt`, retry-once, non-retryable not retried, 5xx → uncertain, no slot → refused, missing file → refused, thumbnail failure non-fatal, no 1,600-unit assumption, operator soft cap, tags parsing, reconciliation |
+| Storage | eligibility matrix, delete-after OFF, delay + 24 h cap, local+Drive deletion recorded, Drive failure not marked deleted, not-yet-eligible deferred, only-copy protection, path confinement, hashing, usage |
+| Security | owner allowlist, list never exposed, signed HttpOnly cookie, tampered cookie rejected, expiry, cookie-only parsing, key rotation invalidates, log redaction, no secrets in browser payload, `.env.example` clean, `.gitignore` coverage, no committed token file, config validation, narrow Drive scope, argv-array subprocess, clean client bundle |
+| HTTP | every endpoint, 401 without a session, JSON 404, path traversal, asset confinement |
+| Legacy | original files present, legacy entry point intact, no legacy AI/video module required |
+
+---
+
+## Legacy AgentTube app
+
+The original autonomous content-generation application is **untouched** and
+still runs:
+
+```bash
+npm run legacy           # node index.js
+npm run legacy:scheduler # node schedules/daily-automation.js
+npm run test:legacy      # node test.js
+```
+
+None of its AI video-generation, TTS, narration, script, research, comment,
+analytics, experiment or learning code is required by the new workflow. It is
+kept only because it is harmless and still useful in its own right. The new
+system's dependencies live in `dependencies`; the legacy extras live in
+`optionalDependencies` so a failed native build never breaks `npm install`.
+
+---
+
+## Known limitations
+
+1. **A powered-off local PC cannot upload.** Already-scheduled videos still
+   publish on time; new uploads wait for the machine to come back.
+2. **Missed slots are skipped, never back-filled.** If the app is down at
+   08:00 ET, that slot is lost and the next video takes 14:00 ET.
+3. **FFmpeg is required** for video analysis and the thumbnail frame fallback.
+   Without it, uploads are validated by filename and size only, and thumbnails
+   can only come from the AI provider.
+4. **Single channel, single owner.** No multi-tenancy, no roles, no team access.
+5. **`node:sqlite` is experimental** in Node 22 (stable in 23+). It emits an
+   `ExperimentalWarning` at startup; this is expected and harmless.
+6. **YouTube quota is not predicted.** No per-call cost is assumed anywhere.
+   Uploads are counted and exposed on the dashboard, and
+   `YOUTUBE_DAILY_INSERT_SOFT_CAP` is an optional operator-set guard (default
+   0 = off). If you hit `quotaExceeded`, the video is marked FAILED with the
+   exact API error and stays retryable.
+7. **Trend research is off by default.** When enabled it only supplies
+   discoverability vocabulary; it never claims anything is trending without
+   real data, and never decides what to create.
+8. **Sequential uploads by default.** `WORKER_CONCURRENCY` can raise this, but
+   1 is the safest for a phone browser and for YouTube rate limits.
+9. **`thumbnails.set` requires a verified channel.** If your channel is not
+   verified for custom thumbnails, the thumbnail upload is logged and skipped;
+   the video is still scheduled.

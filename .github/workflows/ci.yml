@@ -2,31 +2,76 @@ name: CI
 
 on:
   push:
-    branches:
-      - master
+    branches: [master, main, 'arena/**']
   pull_request:
-    branches:
-      - master
+    branches: [master, main]
 
 jobs:
-  test:
+  lint-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '22'
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version
 
       - name: Lint
         run: npm run lint
 
-      - name: Test
+      - name: Unit tests (bulk ingest scheduler)
         run: npm test
+
+      - name: Verify no secrets are committed
+        run: |
+          if git ls-files | grep -E '(^|/)\.env$|tokens\.json$|credentials\.json$'; then
+            echo "ERROR: a secret-bearing file is tracked by git"
+            exit 1
+          fi
+          echo "No .env, tokens.json or credentials.json is tracked."
+
+      - name: Verify .env.example has no real secrets
+        run: |
+          if grep -qE 'AIza[0-9A-Za-z_-]{20,}|sk-or-v1-[0-9A-Za-z]{16,}|GOCSPX-[0-9A-Za-z_-]{10,}' .env.example; then
+            echo "ERROR: .env.example contains something that looks like a real secret"
+            exit 1
+          fi
+          echo ".env.example is clean."
+
+      - name: Verify the app boots with a minimal config
+        env:
+          PORT: '3199'
+          APP_URL: http://localhost:3199
+          DATABASE_PATH: ./data/ci.db
+          UPLOAD_DIR: ./data/uploads
+          DERIVED_DIR: ./data/derived
+          LOG_DIR: ./logs
+          OWNER_EMAIL: ci-owner@example.com
+          ENCRYPTION_KEY: ci-only-not-a-secret
+          GOOGLE_CLIENT_ID: ci-client-id
+          GOOGLE_CLIENT_SECRET: ci-client-secret
+          TIMEZONE: America/New_York
+        run: |
+          node -e "
+            process.env.PORT='3199';
+            const {main}=require('./server.js');
+            main().then(async () => {
+              const r = await fetch('http://127.0.0.1:3199/api/healthz');
+              if (r.status !== 200) { console.error('healthz failed', r.status); process.exit(1); }
+              console.log('boot + healthz OK');
+              process.exit(0);
+            }).catch(e => { console.error('BOOT FAILED', e); process.exit(1); });
+          "
